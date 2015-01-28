@@ -31,7 +31,7 @@ DRIVE_URL_REGEX = re.compile(
     # below is the drive ID, it can contain letters,
     # digits, hyphens, and underscores
     "([a-zA-Z0-9\-_]+)"
-    "/[editview]+\?usp=[drive_websharing]+"
+    "/[editview]+.+"
 )
 
 NATIVE_GOOGLE_DOC_TYPES = {'document', 'presentation', 'spreadsheets'}
@@ -148,7 +148,6 @@ class DriveDocumentFinder(object):
 
     @staticmethod
     def _is_valid_redirect_url(url):
-        print url
         # If the host is google.com, this means they tried to
         # redirect us to a login page, so it's not accessible.
         return LOGIN_REDIRECTION_HOST not in urlsplit(url).hostname.lower()
