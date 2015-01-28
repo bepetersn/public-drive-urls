@@ -9,7 +9,7 @@ setup(
     description="Find Google Drive download URLs from a file's sharing URL",
     license="MIT",
     url="https://github.com/wilbertom/confyg",
-    packages=['public_drive_urls'],
+    py_modules=['public_drive_urls'],
     classifiers=[
     ],
 )
