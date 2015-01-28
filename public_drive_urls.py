@@ -39,11 +39,19 @@ NATIVE_GOOGLE_DOC_TYPES = {'document', 'presentation', 'spreadsheets'}
 DEFAULT_EXPORT_FORMAT = 'pdf'
 
 
-class BadUrlException(Exception):
+class DriveException(Exception):
     pass
 
 
-class NotPublicResourceException(Exception):
+class NotPublicResourceException(DriveException):
+    pass
+
+
+class BadUrlException(DriveException):
+    pass
+
+
+class NoRedirectException(DriveException):
     pass
 
 
@@ -96,10 +104,11 @@ class DriveDocumentFinder(object):
     sharing directly into its actual location, for which
     this class delegates to the DriveDocumentResource class.
 
-    If the URL doesn't redirect, (i.e. returns 200, 404, etc.)
-    it will raise a BadUrlException. If the URL resolves to
-    anything at google.com, assumes that it redirected to a
-    sign-in page, and raises NotPublicResourceException.
+    If we can't parse the share URL, return None. If the URL
+    doesn't redirect, (i.e. returns 200, 404, etc.) it will
+    raise a BadUrlException. If the URL resolves to anything
+    at google.com, assumes that it redirected to a sign-in
+    page, and raises NotPublicResourceException.
     """
 
     LOGIN_REDIRECTION_HOST = 'google.com'
@@ -107,27 +116,39 @@ class DriveDocumentFinder(object):
     def from_share_url(self, shared_url):
         resource = DriveDocumentResource.from_share_url(shared_url)
         if resource is not None:
-            print resource.access_url
             return self.try_resolve_url(resource.access_url)
         else:
+            # Return None if and only if we can't parse
+            # the share URL. May want to change this eventually.
             return None
 
     def try_resolve_url(self, access_url):
         response = requests.get(access_url, allow_redirects=False)
+        # if there is a redirection, this might mean we are being
+        # redirected to the real resource, or to a login page
         if response.status_code == 302:
-            return self._find_real_resource(response)
+            return self._find_redirect_location(response)
+        elif response.status_code == 200:
+            # It's only acceptable to get a 200 if we did not
+            # allow redirection, so there are no false positives;
+            # in this case, we already have the real URL.
+            return access_url
         else:
             raise BadUrlException
 
-    def _find_real_resource(self, response):
+    def _find_redirect_location(self, response):
         possible_url = response.headers.get('location')
-        if self._url_is_valid(possible_url):
-            return possible_url
+        if possible_url is not None:
+            if self._is_valid_redirect_url(possible_url):
+                return possible_url
+            else:
+                raise NotPublicResourceException
         else:
-            raise NotPublicResourceException
+            raise NoRedirectException
 
     @staticmethod
-    def _url_is_valid(url):
+    def _is_valid_redirect_url(url):
+        print url
         # If the host is google.com, this means they tried to
         # redirect us to a login page, so it's not accessible.
         return LOGIN_REDIRECTION_HOST not in urlsplit(url).hostname.lower()
