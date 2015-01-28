@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name="public-drive-urls",
-    version='0.0.2',
+    version='0.0.3',
     author="Brian Peterson",
     author_email="bepetersn@gmail.com",
     description="Find Google Drive download URLs from a file's sharing URL",
