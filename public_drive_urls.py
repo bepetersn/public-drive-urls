@@ -20,7 +20,7 @@ ACCESS_URLS = {
     # These files are accessed through google docs and have a slightly
     # different structure, especially in how you specify an export format
     'document': "https://docs.google.com/document/d/{}/export?format={}",
-    'presentation': "https://docs.google.com/presentation/d/{}/export?format={}",
+    'presentation': "https://docs.google.com/presentation/d/{}/export/{}",
     'spreadsheets': "https://docs.google.com/spreadsheets/d/{}/export?format={}"
 }
 
