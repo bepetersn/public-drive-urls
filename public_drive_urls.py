@@ -39,19 +39,7 @@ NATIVE_GOOGLE_DOC_TYPES = {'document', 'presentation', 'spreadsheets'}
 DEFAULT_EXPORT_FORMAT = 'pdf'
 
 
-class DriveException(Exception):
-    pass
-
-
-class NotPublicResourceException(DriveException):
-    pass
-
-
-class BadUrlException(DriveException):
-    pass
-
-
-class NoRedirectException(DriveException):
+class NotPublicResourceException(Exception):
     pass
 
 
@@ -91,6 +79,8 @@ class DriveDocumentResource(object):
         if match is not None:
             return DriveDocumentResource(match.group(2), match.group(1))
         else:
+            # If we're here, we just couldn't find a valid Google Drive
+            # share URL, though it might indicate a parse error too.
             return None
 
 
@@ -118,8 +108,6 @@ class DriveDocumentFinder(object):
         if resource is not None:
             return self.try_resolve_url(resource.access_url)
         else:
-            # Return None if and only if we can't parse
-            # the share URL. May want to change this eventually.
             return None
 
     def try_resolve_url(self, access_url):
@@ -134,7 +122,8 @@ class DriveDocumentFinder(object):
             # in this case, we already have the real URL.
             return access_url
         else:
-            raise BadUrlException
+            # Here, we got a bad response
+            return None
 
     def _find_redirect_location(self, response):
         possible_url = response.headers.get('location')
@@ -144,7 +133,10 @@ class DriveDocumentFinder(object):
             else:
                 raise NotPublicResourceException
         else:
-            raise NoRedirectException
+            # Here there was a weird error, which is
+            # that when we looked for a redirect location,
+            # we didn't find one.
+            return None
 
     @staticmethod
     def _is_valid_redirect_url(url):
