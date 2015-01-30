@@ -31,7 +31,7 @@ DRIVE_URL_REGEX = re.compile(
     # below is the drive ID, it can contain letters,
     # digits, hyphens, and underscores
     "([a-zA-Z0-9\-_]+)"
-    "/(?:edit|view).+"
+    "/(?:edit|view).*"
 )
 
 NATIVE_GOOGLE_DOC_TYPES = {'document', 'presentation', 'spreadsheets'}
