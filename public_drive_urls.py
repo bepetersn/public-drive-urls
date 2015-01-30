@@ -25,13 +25,13 @@ ACCESS_URLS = {
 }
 
 DRIVE_URL_REGEX = re.compile(
-    "https://[docsdrive]+\.google\.com/"
+    "https://(?:docs|drive)\.google\.com/"
     # below is the document's hosting type
-    "(.+?)/d/"
+    "(file|document|presentation|spreadsheets)/d/"
     # below is the drive ID, it can contain letters,
     # digits, hyphens, and underscores
     "([a-zA-Z0-9\-_]+)"
-    "/[editview]+.+"
+    "/(?:edit|view).+"
 )
 
 NATIVE_GOOGLE_DOC_TYPES = {'document', 'presentation', 'spreadsheets'}
@@ -77,7 +77,14 @@ class DriveDocumentResource(object):
         # parse drive id and document type from share url
         match = DRIVE_URL_REGEX.match(share_url)
         if match is not None:
-            return DriveDocumentResource(match.group(2), match.group(1))
+            drive_id = match.group(2)
+            hosting_type = match.group(1)
+            if drive_id is not None and hosting_type is not None:
+                return DriveDocumentResource(drive_id, hosting_type)
+            else:
+                # if we're here, either the drive_id or hosting_type
+                # weren't able to be parsed
+                return None
         else:
             # If we're here, we just couldn't find a valid Google Drive
             # share URL, though it might indicate a parse error too.
