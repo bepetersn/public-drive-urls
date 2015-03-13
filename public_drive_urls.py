@@ -37,13 +37,14 @@ DRIVE_URL_REGEX = re.compile(
 NATIVE_GOOGLE_DOC_TYPES = {'document', 'presentation', 'spreadsheets'}
 
 
-# Define some possible export formats here.
-PDF_EXPORT_FORMAT = 'pdf'
-DOCX_EXPORT_FORMAT = 'docx'
-PNG_EXPORT_FORMAT = 'png'
+# Define some export formats in which to 
+# to retrieve documents from Google Drive 
+class ExportFormats(object):
+    PDF = 'pdf'
+    DOCX = 'docx'
+    PNG = 'png'
 
-
-DEFAULT_EXPORT_FORMAT = PDF_EXPORT_FORMAT
+    DEFAULT = 'pdf'
 
 
 class NotPublicResourceException(Exception):
@@ -87,7 +88,7 @@ class DriveDocumentResource(object):
 
     def _set_export_format(self, format_override=None):
         if format_override is None:
-            self.export_format = DEFAULT_EXPORT_FORMAT
+            self.export_format = ExportFormats.DEFAULT
         else:
             self.export_format = format_override
 
