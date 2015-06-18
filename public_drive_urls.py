@@ -24,8 +24,11 @@ ACCESS_URLS = {
     'spreadsheets': "https://docs.google.com/spreadsheets/d/{}/export?format={}"
 }
 
+
 DRIVE_URL_REGEX = re.compile(
     "https://(?:docs|drive)\.google\.com/"
+    # possible domain if using google apps, etc.
+    "(?:a/[a-zA-Z0-9\-.]+/)?"
     # below is the document's hosting type
     "(file|document|presentation|spreadsheets)/d/"
     # below is the drive ID, it can contain letters,
