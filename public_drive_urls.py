@@ -32,7 +32,7 @@ SHARE_URL_REGEXES = (
         # possible domain if using google apps, etc.
         "(?:a/[a-zA-Z0-9\-.]+/)?"
         # below is the document's hosting type
-        "(file|document|presentation|spreadsheets)/d/"
+        "(file|document|presentation|spreadsheets|drawings)/d/"
         # below is the drive ID, it can contain letters,
         # digits, hyphens, and underscores
         "([a-zA-Z0-9\-_]+)"
