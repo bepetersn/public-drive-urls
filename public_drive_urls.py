@@ -21,7 +21,8 @@ ACCESS_URLS = {
     # different structure, especially in how you specify an export format
     'document': "https://docs.google.com/document/d/{}/export?format={}",
     'presentation': "https://docs.google.com/presentation/d/{}/export/{}",
-    'spreadsheets': "https://docs.google.com/spreadsheets/d/{}/export?format={}"
+    'spreadsheets': "https://docs.google.com/spreadsheets/d/{}/export?format={}",
+    'drawings': "https://docs.google.com/drawings/d/{}/export/{}"
 }
 
 
@@ -38,7 +39,7 @@ SHARE_URL_REGEXES = (
         "/.*"
     ),
     re.compile(
-        "https://docs\.google\.com/"
+        "https://(?:docs|drive)\.google\.com/"
         "(open)\?id="
         # below is the drive ID
         "([a-zA-Z0-9\-_]+)"
@@ -84,7 +85,7 @@ class DriveDocumentResource(object):
         )
 
     def guess_hosting_type(self):
-        for hosting_type in NATIVE_GOOGLE_DOC_TYPES:
+        for hosting_type in ACCESS_URLS.keys():
             # Try accessing possible URLs
             # until we find one that works
             response = requests.get(self.get_access_url(hosting_type))
