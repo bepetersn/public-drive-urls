@@ -25,19 +25,28 @@ ACCESS_URLS = {
 }
 
 
-DRIVE_URL_REGEX = re.compile(
-    "https://(?:docs|drive)\.google\.com/"
-    # possible domain if using google apps, etc.
-    "(?:a/[a-zA-Z0-9\-.]+/)?"
-    # below is the document's hosting type
-    "(file|document|presentation|spreadsheets)/d/"
-    # below is the drive ID, it can contain letters,
-    # digits, hyphens, and underscores
-    "([a-zA-Z0-9\-_]+)"
-    "/.*"
+SHARE_URL_REGEXES = (
+    re.compile(
+        "https://(?:docs|drive)\.google\.com/"
+        # possible domain if using google apps, etc.
+        "(?:a/[a-zA-Z0-9\-.]+/)?"
+        # below is the document's hosting type
+        "(file|document|presentation|spreadsheets)/d/"
+        # below is the drive ID, it can contain letters,
+        # digits, hyphens, and underscores
+        "([a-zA-Z0-9\-_]+)"
+        "/.*"
+    ),
+    re.compile(
+        "https://docs\.google\.com/"
+        "(open)\?id="
+        # below is the drive ID
+        "([a-zA-Z0-9\-_]+)"
+    )
 )
 
-NATIVE_GOOGLE_DOC_TYPES = {'document', 'presentation', 'spreadsheets'}
+
+NATIVE_GOOGLE_DOC_TYPES = {'document', 'presentation', 'spreadsheets', 'drawings'}
 
 
 # Define some export formats in which to 
@@ -46,7 +55,6 @@ class ExportFormats(object):
     PDF = 'pdf'
     DOCX = 'docx'
     PNG = 'png'
-
     DEFAULT = 'pdf'
 
 
@@ -64,55 +72,76 @@ class DriveDocumentResource(object):
     for exporting documents.
     """
 
-    def __init__(self, drive_id, hosting_type, export_format=None):
+    def __init__(self, drive_id, hosting_type=None, export_format=None):
         self.drive_id = drive_id
-        self.hosting_type = hosting_type
+        # "open" hosting type really means we don't
+        # know what type it is, & should guess
+        self.hosting_type = hosting_type if \
+            hosting_type != 'open' else self.guess_hosting_type()
         self.export_format = None
-        self.access_url = self._set_access_url(export_format)
+        self.access_url = self.get_access_url(
+            self.hosting_type, export_format
+        )
 
-    def _set_access_url(self, export_format=None):
+    def guess_hosting_type(self):
+        for hosting_type in NATIVE_GOOGLE_DOC_TYPES:
+            # Try accessing possible URLs
+            # until we find one that works
+            response = requests.get(self.get_access_url(hosting_type))
+            if response.status_code == requests.codes.ok:
+                break
+        else:
+            # No hosting type found which
+            # yields an actual document
+            return None
+
+        # Return what worked
+        return hosting_type
+
+    def get_access_url(self, hosting_type=None, export_format=None):
 
         # this file is hosted at Google Docs, despite
         # being accessible through Google Drive
-        if self.hosting_type in NATIVE_GOOGLE_DOC_TYPES:
+        if hosting_type in NATIVE_GOOGLE_DOC_TYPES:
 
             # If it's a native Google Doc, we can choose
             # an export format; otherwise, it comes out
             # as it was stored, and we don't guess that.
-            self._set_export_format(export_format)
+            self.export_format = self.get_export_format(export_format)
 
-            return ACCESS_URLS[self.hosting_type]\
+            return ACCESS_URLS[hosting_type]\
                 .format(self.drive_id, self.export_format)
 
         # this file is actually hosted by the Google Drive service
         else:
-            return ACCESS_URLS[self.hosting_type]\
+            return ACCESS_URLS[hosting_type]\
                 .format(self.drive_id)
 
-    def _set_export_format(self, format_override=None):
+    @staticmethod
+    def get_export_format(format_override=None):
         if format_override is None:
-            self.export_format = ExportFormats.DEFAULT
+            return ExportFormats.DEFAULT
         else:
-            self.export_format = format_override
-
+            return format_override
 
     @classmethod
     def from_share_url(cls, share_url, export_format=None):
-        # parse drive id and document type from share url
-        match = DRIVE_URL_REGEX.match(share_url)
-        if match is not None:
-            drive_id = match.group(2)
-            hosting_type = match.group(1)
-            if drive_id is not None and hosting_type is not None:
-                return DriveDocumentResource(drive_id, hosting_type, export_format)
+        for regex in SHARE_URL_REGEXES:
+            # parse drive id and document type from share url
+            match = regex.match(share_url)
+            if match is not None:
+                drive_id = match.group(2)
+                hosting_type = match.group(1)
+                if drive_id is not None and hosting_type is not None:
+                    return DriveDocumentResource(drive_id, hosting_type, export_format)
+                else:
+                    # if we're here, either the drive_id or hosting_type
+                    # weren't able to be parsed
+                    pass
             else:
-                # if we're here, either the drive_id or hosting_type
-                # weren't able to be parsed
-                return None
-        else:
-            # If we're here, we just couldn't find a valid Google Drive
-            # share URL, though it might indicate a parse error too.
-            return None
+                # If we're here, we just couldn't find a valid Google Drive
+                # share URL, though it might indicate a parse error too.
+                pass
 
 
 class DriveDocumentFinder(object):
