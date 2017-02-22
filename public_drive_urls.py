@@ -88,7 +88,13 @@ class DriveDocumentResource(object):
         for hosting_type in ACCESS_URLS.keys():
             # Try accessing possible URLs
             # until we find one that works
-            response = requests.get(self.get_access_url(hosting_type))
+            response = requests.get(
+                self.get_access_url(hosting_type), 
+                # NOTE: We got a lot of ChunkedEncodingError making these 
+                # requests, so we switched to "streaming". This doesn't matter 
+                # for our purposes, as we're just looking at status codes.
+                stream=True
+            )
             if response.status_code == requests.codes.ok:
                 break
         else:
