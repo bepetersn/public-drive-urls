@@ -8,11 +8,11 @@ file that isn't publicly accessible.
 """
 
 from urlparse import urlsplit
+from contextlib import closing
 import requests
 import re
 
 LOGIN_REDIRECTION_HOST = 'google.com'
-
 ACCESS_URLS = {
     # These files are accessed through google drive
     'file': "https://drive.google.com/uc?export=download&id={}",
@@ -24,8 +24,6 @@ ACCESS_URLS = {
     'spreadsheets': "https://docs.google.com/spreadsheets/d/{}/export?format={}",
     'drawings': "https://docs.google.com/drawings/d/{}/export/{}"
 }
-
-
 SHARE_URL_REGEXES = (
     re.compile(
         "https://(?:docs|drive)\.google\.com/"
@@ -45,8 +43,6 @@ SHARE_URL_REGEXES = (
         "([a-zA-Z0-9\-_]+)"
     )
 )
-
-
 NATIVE_GOOGLE_DOC_TYPES = {'document', 'presentation', 'spreadsheets', 'drawings'}
 
 
@@ -88,15 +84,16 @@ class DriveDocumentResource(object):
         for hosting_type in ACCESS_URLS.keys():
             # Try accessing possible URLs
             # until we find one that works
-            response = requests.get(
-                self.get_access_url(hosting_type), 
-                # NOTE: We got a lot of ChunkedEncodingError making these 
-                # requests, so we switched to "streaming". This doesn't matter 
-                # for our purposes, as we're just looking at status codes.
-                stream=True
-            )
-            if response.status_code == requests.codes.ok:
-                break
+            with closing( 
+                requests.get(
+                    self.get_access_url(hosting_type), 
+                    # We're not going to download these responses,
+                    # as we're just looking at status codes.
+                    stream=True
+                )
+            ) as response:
+                if response.ok:
+                    break
         else:
             # No hosting type found which
             # yields an actual document
