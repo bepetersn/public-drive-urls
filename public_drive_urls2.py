@@ -13,7 +13,7 @@ class ResourceNotFoundException(RuntimeError):
     pass
 
 
-class InaccessibleResourceException(RuntimeError):
+class NotPublicResourceException(Exception):
     pass
 
 
@@ -75,7 +75,7 @@ class DriveResourceFinder(object):
             if self.is_accessible_location(redirect_location):
                 return redirect_location
             else:
-                raise InaccessibleResourceException
+                raise NotPublicResourceException
         else:
             # When we looked for a redirect location,
             # we didn't find one, which goes against HTTP.
