@@ -31,9 +31,9 @@ class DriveResourceFinder(object):
     If accessing the URL results in anything but a 200 or 302
     response, (404, etc.) it will raise a ResourceNotFoundException.
     If the URL returns a 302 response but doesn't redirect anywhere,
-    the same error will be raised. Most importantly, if the URL
-    resolves to anything at google.com, assumes that it redirected
-    to a sign-in page, and returns None.
+    the same error will be raised. If the URL resolves to anything 
+    at google.com, assumes that it redirected to a sign-in page, 
+    and raises an InaccessibleResourceException.
     """
 
     def __init__(self):
@@ -45,6 +45,9 @@ class DriveResourceFinder(object):
         # to manage it a little more carefully than usual
         response = self.session.get(url, allow_redirects=False)
         if response.status_code is requests.codes.ok:
+
+            # If we get a direct 200 response, this means
+            # we have the url to the real resource
             return url
 
         elif response.status_code == 302:
