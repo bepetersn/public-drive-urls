@@ -7,7 +7,8 @@
 
 from mock import Mock, MagicMock
 from unittest import TestCase
-from public_drive_urls2 import DriveResourceFinder, ResourceNotFoundException
+from public_drive_urls2 import DriveResourceFinder, \
+        ResourceNotFoundException, NotPublicResourceException
 
 
 EXAMPLE_RESOURCE = (
@@ -32,15 +33,13 @@ class DriveDocumentValidatorTestCase(TestCase):
         finder.session.get = lambda url, **_: Mock(status_code=302, headers={
             'location': EXAMPLE_GOOGLE_LOGIN_URL
         })
-        result = finder.get_drive_resource_url_if_accessible(EXAMPLE_RESOURCE)
-        assert result is None, (
-           'When `drive_resource_is_publicly_accessible` is '
-           'given a url, and accessing it gives a 302 response '
-           '(redirection), we should consider the redirect '
-           'location accessible only if it is not under the '
-           "'google' domain. Somehow, we considered this "
-           "url accessible, even though it did 'redirect' to"
-           " a google login")
+        with self.assertRaises(NotPublicResourceException):
+            result = finder.get_drive_resource_url_if_accessible(EXAMPLE_RESOURCE)
+           # When `drive_resource_is_publicly_accessible` is 
+           # given a url, and accessing it gives a 302 response 
+           # (redirection), we should consider the redirect 
+           # location accessible only if it is not under the 
+           # 'google' domain.
 
     def test_ResourceNotFoundException_occurs_if_a_website_redirects_to_nowhere(self):
         finder = DriveResourceFinder()
