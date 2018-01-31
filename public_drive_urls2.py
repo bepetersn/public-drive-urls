@@ -6,7 +6,7 @@ if sys.version_info[0] < 3:
 else:
     from urllib.parse import urlsplit
 
-LOGIN_REDIRECTION_HOST = 'google.com'
+LOGIN_REDIRECTION_HOST = 'accounts.google.com'
 
 
 class ResourceNotFoundException(RuntimeError):
