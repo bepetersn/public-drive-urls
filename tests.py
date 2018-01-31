@@ -28,18 +28,65 @@ class DriveDocumentValidatorTestCase(TestCase):
            'a url, and accessing it gives a 200 response, '
            'we should automatically consider that url accessible')
 
-    def test_google_drive_url_is_not_accessible_if_it_redirects_to_a_google_domain(self):
+    def test_NotPublicResourceException_occurs_if_it_redirects_to_accounts_google_domain(self):
+        finder = DriveResourceFinder()
+
+        # Use a mutable value so we can access and persist
+        # changes in py2; in py3, we'd use 'nonlocal'
+        # keyword in enclosed function
+        num_get_calls = [0]
+
+        def mock_get(url, **kwargs):
+            num_get_calls[0] += 1
+            if num_get_calls[0] == 1:
+                return Mock(status_code=302, headers={
+                    'location': EXAMPLE_GOOGLE_LOGIN_URL
+                })
+            if num_get_calls[0] == 2:
+                return Mock(status_code=200)
+
+        finder.session.get = mock_get
+
+        with self.assertRaises(NotPublicResourceException):
+
+            # When `drive_resource_is_publicly_accessible` is
+            # given a url, and accessing it gives a 302 response
+            # (redirection), we should consider the redirect
+            # location accessible only if it is not under the
+            # 'accounts.google' domain.
+
+            result = finder.get_drive_resource_url_if_accessible(EXAMPLE_RESOURCE)
+
+    def test_NotPublicResourceException_occurs_if_it_redirects_once_then_redirects_to_accounts_google_domain(self):
+        finder = DriveResourceFinder()
+        import pdb; pdb.set_trace()
+        num_get_calls = [0]
+
+        def mock_get(url, **kwargs):
+            num_get_calls[0] += 1
+            if num_get_calls[0] == 1:
+                return Mock(status_code=302, headers={
+                    'location': 'http://example.com'
+                })
+            if num_get_calls[0] == 2:
+                return Mock(status_code=302, headers={
+                    'location': EXAMPLE_GOOGLE_LOGIN_URL
+                })
+            if num_get_calls[0] == 3:
+                return Mock(status_code=200)
+
+        finder.session.get = mock_get
+        with self.assertRaises(NotPublicResourceException):
+            finder.get_drive_resource_url_if_accessible(EXAMPLE_RESOURCE)
+
+    def test_ResuorceNotFoundException_occurs_if_it_redirects_forever(self):
+
         finder = DriveResourceFinder()
         finder.session.get = lambda url, **_: Mock(status_code=302, headers={
-            'location': EXAMPLE_GOOGLE_LOGIN_URL
+            'location': 'http://example.com'
         })
-        with self.assertRaises(NotPublicResourceException):
-            result = finder.get_drive_resource_url_if_accessible(EXAMPLE_RESOURCE)
-           # When `drive_resource_is_publicly_accessible` is 
-           # given a url, and accessing it gives a 302 response 
-           # (redirection), we should consider the redirect 
-           # location accessible only if it is not under the 
-           # 'google' domain.
+        with self.assertRaises(ResourceNotFoundException):
+            finder.get_drive_resource_url_if_accessible(EXAMPLE_RESOURCE)
 
     def test_ResourceNotFoundException_occurs_if_a_website_redirects_to_nowhere(self):
         finder = DriveResourceFinder()
