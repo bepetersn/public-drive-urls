@@ -1,18 +1,15 @@
 
-"""
-Use this module to turn a Google Drive-provided
-share url for a public file into a url pointing to
-the actual resource. Raises exceptions if the URL
-either doesn't resolve, or appears to point to a
-file that isn't publicly accessible.
-"""
-
-from urlparse import urlsplit
-from contextlib import closing
 import requests
 import re
+import sys
+from contextlib import closing
+from requests import session
+if sys.version_info[0] < 3:
+    from urlparse import urlsplit
+else:
+    from urllib.parse import urlsplit
 
-LOGIN_REDIRECTION_HOST = 'google.com'
+LOGIN_REDIRECTION_HOST = 'accounts.google.com'
 ACCESS_URLS = {
     # These files are accessed through google drive
     'file': "https://drive.google.com/uc?export=download&id={}",
@@ -43,50 +40,78 @@ SHARE_URL_REGEXES = (
         "([a-zA-Z0-9\-_]+)"
     )
 )
-NATIVE_GOOGLE_DOC_TYPES = {'document', 'presentation', 'spreadsheets', 'drawings'}
+DEFAULT_EXPORT_FORMAT = 'pdf'
+NATIVE_GOOGLE_DOC_TYPES = {'document', 'presentation',
+                           'spreadsheets', 'drawings'}
+REDIRECT_LIMIT = 20
+OPEN_HOSTING_TYPE = 'open'
 
 
-# Define some export formats in which to 
-# to retrieve documents from Google Drive 
-class ExportFormats(object):
-    PDF = 'pdf'
-    DOCX = 'docx'
-    PNG = 'png'
-    DEFAULT = 'pdf'
+class ResourceNotFoundException(RuntimeError):
+    pass
 
 
 class NotPublicResourceException(Exception):
     pass
 
 
-class DriveDocumentResource(object):
+class DriveResource(object):
+    """
+    DriveResources represent resources hosted at docs.google.com
+    or drive.google.com, and how they can be accessed (assuming
+    they are publicly accessible).
+
+    Typically, a user might share their document online using
+    a certain URL available from the web UI at these sites
+    by an action called sharing (sending a "share url"). While
+    the share url is all you need to access these resources if
+    you are using a browser, it isn't very helpful if you need
+    to download the resource directly, e.g. from a script --
+    HTML, javascript and CSS will all get in the way.
+
+    This class allows you to go from a share url to the url
+    needed to download your document ("access url").
+
+    Code like the following exemplifies this class's intended usage:
+
+    ```
+    r = DriveResource.from_share_url('http://drive.google.com/file/d/foo/')
+    access_url = r.get_access_url()
+
+    # print the documents contents
+    requests.get(access_url).content
+    ```
+
+    Alternatively, if you knew the DriveResource's hosting
+    type and id (by doing your own parsing, etc), you could
+    instantiate this class more directly as follows:
+
+    ```
+    r = DriveResource(id='foo', hosting_type='file')
+    access_url = r.get_access_url()
+    ```
 
     """
-    This class is primarily responsible for knowing how
-    to turn a URL provided by the Google Drive service
-    for the purpose of sharing, into a URL of one of the
-    formats defined in ACCESS_URLS, provided by Google
-    for exporting documents.
-    """
 
-    def __init__(self, drive_id, hosting_type=None, export_format=None):
-        self.drive_id = drive_id
-        # "open" hosting type really means we don't
-        # know what type it is, & should guess
+    def __init__(self, id, hosting_type=OPEN_HOSTING_TYPE, session=None):
+        self.id = id
+        self.session = session or requests.Session()
+        # OPEN_HOSTING_TYPE is a for-the-moment valid
+        # hosting_type that basically means we need to
+        # guess the real hosting_type
+        self.hosting_type = None
         self.hosting_type = hosting_type if \
-            hosting_type != 'open' else self.guess_hosting_type()
-        self.export_format = None
-        self.access_url = self.get_access_url(
-            self.hosting_type, export_format
-        )
+                hosting_type != OPEN_HOSTING_TYPE \
+                else self.guess_hosting_type()
 
     def guess_hosting_type(self):
+
         for hosting_type in ACCESS_URLS.keys():
             # Try accessing possible URLs
             # until we find one that works
-            with closing( 
-                requests.get(
-                    self.get_access_url(hosting_type), 
+            with closing(
+                self.session.get(
+                    self.get_access_url(hosting_type=hosting_type),
                     # We're not going to download these responses,
                     # as we're just looking at status codes.
                     stream=True
@@ -104,109 +129,137 @@ class DriveDocumentResource(object):
 
     def get_access_url(self, hosting_type=None, export_format=None):
 
+        """
+            Pre-condition: At least one of self.hosting_type
+                           and hosting_type is neither None
+                           nor OPEN_HOSTING_TYPE (not valid
+                           at this point)
+            NOTE: Always specify hosting_type and
+                  export_format by keyword argument if you
+                  are going to, to avoid ambiguity
+        """
+
+        hosting_type = self.hosting_type or hosting_type
+        export_format = export_format or DEFAULT_EXPORT_FORMAT
+
         # this file is hosted at Google Docs, despite
         # being accessible through Google Drive
         if hosting_type in NATIVE_GOOGLE_DOC_TYPES:
 
-            # If it's a native Google Doc, we can choose
-            # an export format; otherwise, it comes out
-            # as it was stored, and we don't guess that.
-            self.export_format = self.get_export_format(export_format)
-
             return ACCESS_URLS[hosting_type]\
-                .format(self.drive_id, self.export_format)
+                .format(self.id, export_format)
 
         # this file is actually hosted by the Google Drive service
         else:
-            return ACCESS_URLS[hosting_type]\
-                .format(self.drive_id)
-
-    @staticmethod
-    def get_export_format(format_override=None):
-        if format_override is None:
-            return ExportFormats.DEFAULT
-        else:
-            return format_override
+            return ACCESS_URLS[hosting_type].format(self.id)
 
     @classmethod
-    def from_share_url(cls, share_url, export_format=None):
+    def from_share_url(cls, share_url, session=session):
         for regex in SHARE_URL_REGEXES:
-            # parse drive id and document type from share url
             match = regex.match(share_url)
             if match is not None:
                 drive_id = match.group(2)
                 hosting_type = match.group(1)
-                if drive_id is not None and hosting_type is not None:
-                    return DriveDocumentResource(drive_id, hosting_type, export_format)
+                if None not in (drive_id, hosting_type):
+                    return cls(drive_id, hosting_type, session=session)
+
+
+class DriveURLResolver(object):
+
+    """
+    This class is responsible for taking a Google Drive url
+    that conforms to one of the formats defined in ACCESS_URLS
+    and seeing to where it ultimately redirects.
+
+    If accessing the URL results in anything but a 200 or 302
+    response, (404, etc.) it will raise a ResourceNotFoundException.
+    If the URL returns a 302 response but doesn't redirect anywhere,
+    the same error will be raised. If the URL resolves to anything
+    at accounts.google.com, assumes that it redirected to a sign-in
+    page, and raises a NotPublicResourceException. If the URL
+    doesn't resolve but redirects over and over, at the 20th time
+    it will fail.
+
+    The main use case here is knowing when a NotPublicResourceException
+    has occurred, because this is a very specific user error that
+    can be handled in an application flow.
+    """
+
+    def __init__(self, session=None):
+        self.session = session or requests.Session()
+
+    def resolve_from_share_url(
+                self, share_url, export_format=None):
+        resource = DriveResource.from_share_url(share_url)
+        access_url = resource.get_access_url(export_format=export_format)
+        return self.resolve_from_access_url(access_url)
+
+    def resolve_from_access_url(self, url):
+        """
+        This function takes a Google Drive resource url that
+        conforms to one of the formats defined in ACCESS_URLS
+        and returns to where it ultimately redirects.
+
+        If accessing the URL results in anything but a 200
+        or 302 response, (404, etc.) it will raise a
+        ResourceNotFoundException. If anything funny happens,
+        (redirect to nowhere, infinite redirection), the same
+        error will be raised.
+
+        Finally, if the URL resolves to anything at
+        accounts.google.com, we assume that it redirected to
+        a sign-in page, and raise a NotPublicResourceException.
+        """
+
+        # Don't allow infinite redirection;
+        # 20 is what chrome uses as a limit
+        redirection = 0
+        while redirection <= REDIRECT_LIMIT:
+
+            # Don't allow implicit redirection because we want
+            # to manage it a little more carefully than usual
+            response = self.session.get(url, allow_redirects=False)
+            if response.status_code is requests.codes.ok:
+
+                # If we get a 200 response, this means
+                # we have the url to the real resource or
+                # possibly, a Google Accounts login page:
+                # we have to see which it is
+                if self.is_accessible_location(url):
+                    return url
                 else:
-                    # if we're here, either the drive_id or hosting_type
-                    # weren't able to be parsed
-                    pass
+                    raise NotPublicResourceException
+
+            elif response.status_code == 302:
+                url = self.get_redirect_location(response)
+                redirection += 1
+
             else:
-                # If we're here, we just couldn't find a valid Google Drive
-                # share URL, though it might indicate a parse error too.
-                pass
+                # Here, we got a bad response, i.e. 4xx
+                # and 5xx status codes
+                raise ResourceNotFoundException
 
-
-class DriveDocumentFinder(object):
-
-    """
-    This class is responsible primarily for taking any URL
-    that conforms to the formats defined by the ACCESS_URLS
-    variable and seeing where it redirects to. There is also
-    a method for turning a URL provided by Google Drive for
-    sharing directly into its actual location, for which
-    this class delegates to the DriveDocumentResource class.
-
-    If we can't parse the share URL, return None. If the URL
-    doesn't redirect, (i.e. returns 200, 404, etc.) it will
-    raise a BadUrlException. If the URL resolves to anything
-    at google.com, assumes that it redirected to a sign-in
-    page, and raises NotPublicResourceException.
-
-    The `from_share_url` method is the primary interface of this
-    class, and is responsible for returning a `DriveDocumentResource`.
-    """
-
-    LOGIN_REDIRECTION_HOST = 'google.com'
-
-    def from_share_url(self, shared_url, export_format=None):
-        resource = DriveDocumentResource.from_share_url(shared_url, export_format)
-        if resource is not None:
-            return self.try_resolve_url(resource.access_url)
-        else:
-            return None
-
-    def try_resolve_url(self, access_url):
-        response = requests.get(access_url, allow_redirects=False)
-        # if there is a redirection, this might mean we are being
-        # redirected to the real resource, or to a login page
-        if response.status_code == 302:
-            return self._find_redirect_location(response)
-        elif response.status_code == 200:
-            # It's only acceptable to get a 200 if we did not
-            # allow redirection, so there are no false positives;
-            # in this case, we already have the real URL.
-            return access_url
-        else:
-            # Here, we got a bad response
-            return None
-
-    def _find_redirect_location(self, response):
-        possible_url = response.headers.get('location')
-        if possible_url is not None:
-            if self._is_valid_redirect_url(possible_url):
-                return possible_url
-            else:
-                raise NotPublicResourceException
-        else:
-            # Here there was a weird error, which is
-            # that when we looked for a redirect location,
-            # we didn't find one.
-            return None
+        # Here, we got into an infinite redirection
+        raise ResourceNotFoundException
 
     @staticmethod
-    def _is_valid_redirect_url(url):
-        # If the host is google.com, this means they tried to
+    def get_redirect_location(response):
+        """
+        Return the redirect location from the given response's
+        location header. If there was no location header,
+        raise ResourceNotFoundException.
+        """
+
+        redirect_location = response.headers.get('location')
+        if redirect_location is not None:
+            return redirect_location
+        else:
+            # When we looked for a redirect location,
+            # we didn't find one, which goes against HTTP.
+            raise ResourceNotFoundException
+
+    @staticmethod
+    def is_accessible_location(url):
+        # If the host is accounts.google.com, this means they tried to
         # redirect us to a login page, so it's not accessible.
         return LOGIN_REDIRECTION_HOST not in urlsplit(url).hostname.lower()
