@@ -94,7 +94,7 @@ class DriveResource(object):
 
     """
 
-    def __init__(self, drive_id, hosting_type=OPEN_HOSTING_TYPE, session=None):
+    def __init__(self, drive_id, hosting_type=None, session=None):
 
         assert re.match(
             ALLOWED_DRIVE_ID_CHARACTER_CLS + '$',
@@ -105,13 +105,14 @@ class DriveResource(object):
 
         self.id = drive_id
         self.session = session or requests.Session()
-        # OPEN_HOSTING_TYPE is a for-the-moment valid
-        # hosting_type that basically means we need to
-        # guess the real hosting_type
-        self.hosting_type = None
-        self.hosting_type = hosting_type if \
-                hosting_type != OPEN_HOSTING_TYPE \
-                else self.guess_hosting_type()
+
+        # OPEN_HOSTING_TYPE is a hosting_type that is only
+        # valid in a share_url, and if it's present at this
+        # stage, we need to guess the real hosting_type
+        if hosting_type in (None, OPEN_HOSTING_TYPE):
+            self.hosting_type = self.guess_hosting_type()
+        else:
+            self.hosting_type = hosting_type
 
     def guess_hosting_type(self):
 
