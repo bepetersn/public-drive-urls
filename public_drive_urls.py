@@ -21,6 +21,7 @@ ACCESS_URLS = {
     'spreadsheets': "https://docs.google.com/spreadsheets/d/{}/export?format={}",
     'drawings': "https://docs.google.com/drawings/d/{}/export/{}"
 }
+ALLOWED_DRIVE_ID_CHARACTER_CLS = '[a-zA-Z0-9\-_]+'
 SHARE_URL_REGEXES = (
     re.compile(
         "https://(?:docs|drive)\.google\.com/"
@@ -30,8 +31,8 @@ SHARE_URL_REGEXES = (
         "(file|document|presentation|spreadsheets|drawings)/d/"
         # below is the drive ID, it can contain letters,
         # digits, hyphens, and underscores
-        "([a-zA-Z0-9\-_]+)"
-        "/.*"
+        "({})"
+        "/.*".format(ALLOWED_DRIVE_ID_CHARACTER_CLS)
     ),
     re.compile(
         "https://(?:docs|drive)\.google\.com/"
@@ -93,8 +94,16 @@ class DriveResource(object):
 
     """
 
-    def __init__(self, id, hosting_type=OPEN_HOSTING_TYPE, session=None):
-        self.id = id
+    def __init__(self, drive_id, hosting_type=OPEN_HOSTING_TYPE, session=None):
+
+        assert re.match(
+            ALLOWED_DRIVE_ID_CHARACTER_CLS + '$',
+            drive_id), \
+                ('Usually only these characters are allowed '
+                'in a DriveResource id: {}'.format(
+                    ALLOWED_DRIVE_ID_CHARACTER_CLS))
+
+        self.id = drive_id
         self.session = session or requests.Session()
         # OPEN_HOSTING_TYPE is a for-the-moment valid
         # hosting_type that basically means we need to
