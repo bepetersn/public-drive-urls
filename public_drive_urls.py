@@ -184,11 +184,11 @@ class DriveURLResolver(object):
     If accessing the URL results in anything but a 200 or 302
     response, (404, etc.) it will raise a ResourceNotFoundException.
     If the URL returns a 302 response but doesn't redirect anywhere,
-    the same error will be raised. If the URL resolves to anything
-    at accounts.google.com, assumes that it redirected to a sign-in
-    page, and raises a NotPublicResourceException. If the URL
-    doesn't resolve but redirects over and over, at the 20th time
-    it will fail.
+    the same error will be raised. If the URL doesn't resolve but
+    redirects over and over, at the 20th time, the same error.
+    Most importantly, if the URL resolves to anything at
+    accounts.google.com, assumes that it redirected to a sign-in page,
+    and raises a NotPublicResourceException.
 
     The main use case here is knowing when a NotPublicResourceException
     has occurred, because this is a very specific user error that
