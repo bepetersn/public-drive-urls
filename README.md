@@ -22,6 +22,7 @@ This class allows you to go from a share url to the url
 needed to download your document ("access url").
 Code like the following exemplifies this class's intended usage:
 ```
+from public_drive_urls import DriveResource
 r = DriveResource.from_share_url('http://drive.google.com/file/d/foo/')
 access_url = r.get_access_url()
 # print the documents contents
