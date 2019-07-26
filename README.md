@@ -21,7 +21,7 @@ HTML, javascript and CSS will all get in the way.
 This class allows you to go from a share url to the url
 needed to download your document ("access url").
 Code like the following exemplifies this class's intended usage:
-```
+```python
 from public_drive_urls import DriveResource
 r = DriveResource.from_share_url('http://drive.google.com/file/d/foo/')
 access_url = r.get_access_url()
@@ -31,7 +31,7 @@ requests.get(access_url).content
 Alternatively, if you knew the DriveResource's hosting
 type and id (by doing your own parsing, etc), you could
 instantiate this class more directly as follows:
-```
+```python
 r = DriveResource(id='foo', hosting_type='file')
 access_url = r.get_access_url()
 ```
